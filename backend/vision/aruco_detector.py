@@ -1,14 +1,12 @@
 import cv2
 import cv2.aruco as aruco
 
-# Initialize the ArUco dictionary (DICT_4X4_50 is standard and fast to read)
+# Initialize the ArUco dictionary (DICT_4X4_100 per project spec)
 try:
-    # Newer OpenCV versions
-    DICTIONARY = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
+    DICTIONARY = aruco.getPredefinedDictionary(aruco.DICT_4X4_100)
     PARAMETERS = aruco.DetectorParameters()
 except AttributeError:
-    # Older OpenCV versions
-    DICTIONARY = aruco.Dictionary_get(aruco.DICT_4X4_50)
+    DICTIONARY = aruco.Dictionary_get(aruco.DICT_4X4_100)
     PARAMETERS = aruco.DetectorParameters_create()
 
 def detect_marker(image):
