@@ -1,0 +1,13 @@
+{
+  "room_name": "Demo Room",
+  "positions": [
+    {
+      "id": "near_door",
+      "label": "Near the door",
+      "description": "Standing near the room entrance door",
+      "exit_instruction": "The door is right behind you. Turn around and step forward to exit.",
+      "exit_direction": "behind",
+      "image": "images/near_door.jpg"
+    }
+  ]
+}
