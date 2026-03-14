@@ -1,2 +1,13 @@
 __pycache__/
 *.pt
+
+# Environment variables — never commit these
+.env
+.env.local
+.env*.local
+frontend/.env
+frontend/.env.local
+
+# Dependencies
+node_modules/
+frontend/node_modules/

@@ -5,9 +5,11 @@ import ControlPanel from './components/ControlPanel.jsx';
 import CaptureRoom from './components/CaptureRoom.jsx';
 import './App.css';
 
+const ENV_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+
 export default function App() {
-  const [apiKey, setApiKey] = useState('');
-  const [started, setStarted] = useState(false);
+  const [apiKey, setApiKey] = useState(ENV_API_KEY);
+  const [started, setStarted] = useState(!!ENV_API_KEY);
   const [page, setPage] = useState('main'); // 'main' or 'capture'
 
   // Check URL hash for routing
