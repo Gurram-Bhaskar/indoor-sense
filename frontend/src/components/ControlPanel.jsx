@@ -75,14 +75,14 @@ export default function ControlPanel() {
       {/* Control buttons */}
       <div className="controls">
         <button
-          className={`btn btn-primary ${connected ? 'active' : ''}`}
+          className={`speak-btn btn btn-primary ${connected ? 'active' : ''}`}
           onClick={handleToggle}
           disabled={connecting}
         >
           {connecting ? 'Connecting...' : connected ? 'Stop' : 'Start Navigation'}
         </button>
         <button
-          className="btn btn-danger"
+          className="speak-btn btn btn-danger"
           onClick={handleCallAssistant}
         >
           Call Assistant

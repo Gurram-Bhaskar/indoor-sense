@@ -182,6 +182,7 @@ export default function CaptureRoom() {
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
+                    className="speak-btn"
                     onClick={() => startEdit(pos)}
                     style={{
                       padding: '8px 12px', borderRadius: 6,
@@ -192,6 +193,7 @@ export default function CaptureRoom() {
                     Edit
                   </button>
                   <button
+                    className="speak-btn"
                     onClick={() => capturePosition(pos)}
                     style={{
                       padding: '8px 16px', borderRadius: 6,
@@ -241,6 +243,7 @@ export default function CaptureRoom() {
                     <option value="ahead-right">Ahead-Right</option>
                   </select>
                   <button
+                    className="speak-btn"
                     onClick={() => setEditing(null)}
                     style={{
                       padding: '6px 12px', borderRadius: 6, border: 'none',

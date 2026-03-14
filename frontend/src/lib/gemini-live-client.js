@@ -5,24 +5,33 @@
 
 const WS_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 
-const SYSTEM_INSTRUCTION = `Your name is Nav. You are a specialized assistive navigation assistant for a visually impaired user indoors. When the user says "Nav" or "Hey Nav", respond immediately — they are calling you by name. Introduce yourself as Nav when you first speak.
+const SYSTEM_INSTRUCTION = `Your name is Nav. You are a fast, concise assistive navigation assistant for a visually impaired user indoors. When the user says "Nav" or "Hey Nav", respond immediately.
 
-PROACTIVE VISION: You receive a continuous live camera feed. You MUST proactively narrate what you see WITHOUT waiting to be asked. Every few seconds, describe the scene in one or two short sentences — mention obstacles, people, doors, stairs, signs, walls, furniture, or any hazard. Say things like "Chair ahead on your left", "Door straight ahead, handle on the right", "Person walking toward you", "Step down in about two meters". If the scene is clear, say "Path looks clear ahead."
+VISION UPDATES: You receive live camera frames every 2 seconds. For each frame, give ONE short statement — 5 to 8 words max. Examples:
+- "Chair on your left, path clear right."
+- "Door straight ahead, handle on right."
+- "Person approaching from the front."
+- "Step down in two meters."
+- "Path looks clear ahead."
 
-PRIORITY ORDER:
-1. Immediate hazards (moving objects, drop-offs, wet floors) — warn instantly
-2. Navigation obstacles (furniture, walls, doors)
-3. Useful landmarks (signs, counters, windows)
-4. Context from NAVIGATION UPDATE / ROOM POSITION UPDATE messages
+PRIORITY (highest first):
+1. Moving hazards — warn INSTANTLY
+2. Obstacles blocking the path
+3. Useful landmarks (doors, signs, counters)
 
-Keep responses short (1-2 sentences max). Be warm but direct — the user depends on you for safety. Reference what they can feel, hear, or touch when possible.`;
+RULES:
+- Never say more than 8 words unless the user asks a question
+- No filler words like "I can see..." or "It appears..."
+- Speak the most important thing only
+- When user asks a question, answer in 1 sentence`;
 
 export class GeminiLiveClient {
-  constructor({ apiKey, onAudio, onText, onUserSpeech, onInterrupted, onClose, onError }) {
+  constructor({ apiKey, onAudio, onText, onUserSpeech, onTurnComplete, onInterrupted, onClose, onError }) {
     this.apiKey = apiKey;
     this.onAudio = onAudio || (() => {});
     this.onText = onText || (() => {});
     this.onUserSpeech = onUserSpeech || (() => {});
+    this.onTurnComplete = onTurnComplete || (() => {});
     this.onInterrupted = onInterrupted || (() => {});
     this.onClose = onClose || (() => {});
     this.onError = onError || (() => {});
@@ -75,7 +84,6 @@ export class GeminiLiveClient {
         model: 'models/gemini-2.5-flash-native-audio-latest',
         generationConfig: {
           responseModalities: ['AUDIO'],
-          inputAudioTranscription: {},
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
@@ -153,6 +161,10 @@ export class GeminiLiveClient {
             this.onText(part.text);
           }
         }
+      }
+      // Gemini signals its turn is fully done — safe to send the next prompt
+      if (sc.turnComplete) {
+        this.onTurnComplete();
       }
     }
   }

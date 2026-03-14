@@ -43,6 +43,7 @@ export default function App() {
           onKeyDown={(e) => e.key === 'Enter' && apiKey.trim() && setStarted(true)}
         />
         <button
+          className="speak-btn"
           onClick={() => apiKey.trim() && setStarted(true)}
           disabled={!apiKey.trim()}
         >

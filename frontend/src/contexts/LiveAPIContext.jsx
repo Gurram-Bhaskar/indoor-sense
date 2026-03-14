@@ -19,6 +19,8 @@ export function LiveAPIProvider({ apiKey, children }) {
   const videoIntervalRef = useRef(null);
   const surroundingsIntervalRef = useRef(null);
   const emergencyFiredRef = useRef(false);
+  const lastResponseTimeRef = useRef(0);
+  const geminiIdleRef = useRef(true); // true = Gemini finished its last turn, safe to send next prompt
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const backendWsRef = useRef(null);
@@ -61,6 +63,9 @@ export function LiveAPIProvider({ apiKey, children }) {
     const client = new GeminiLiveClient({
       apiKey,
       onAudio: (base64Data) => {
+        lastResponseTimeRef.current = Date.now();
+        // Stop local TTS so it doesn't collide with Gemini audio
+        window.speechSynthesis.cancel();
         streamer.addPCM(base64Data);
       },
       onText: (text) => {
@@ -79,7 +84,11 @@ export function LiveAPIProvider({ apiKey, children }) {
           setTimeout(() => { window.location.href = 'tel:9900315539'; }, 2000);
         }
       },
+      onTurnComplete: () => {
+        geminiIdleRef.current = true; // Gemini finished — allow next surroundings prompt
+      },
       onInterrupted: () => {
+        geminiIdleRef.current = true; // User interrupted — Gemini is idle again
         streamer.stop();
       },
       onClose: () => {
@@ -132,8 +141,8 @@ export function LiveAPIProvider({ apiKey, children }) {
 
       const source = audioCtx.createMediaStreamSource(stream);
 
-      // 1024 buffer = ~64ms latency (down from 128ms)
-      const processor = audioCtx.createScriptProcessor(1024, 1, 1);
+      // 512 buffer = ~32ms latency (down from 64ms)
+      const processor = audioCtx.createScriptProcessor(512, 1, 1);
       audioWorkletRef.current = processor;
 
       processor.onaudioprocess = (e) => {
@@ -150,7 +159,7 @@ export function LiveAPIProvider({ apiKey, children }) {
 
       source.connect(processor);
       processor.connect(audioCtx.destination);
-      console.log('[LiveAPI] Audio capture started (1024 buffer, interactive)');
+      console.log('[LiveAPI] Audio capture started (512 buffer, ~32ms latency)');
     } catch (err) {
       console.warn('[LiveAPI] Audio capture failed:', err);
     }
@@ -166,8 +175,8 @@ export function LiveAPIProvider({ apiKey, children }) {
 
       const canvas = canvasRef.current || document.createElement('canvas');
       canvasRef.current = canvas;
-      canvas.width = 320;
-      canvas.height = 240;
+      canvas.width = 256;
+      canvas.height = 192;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
       // Separate higher-res canvas for ArUco detection
@@ -180,14 +189,14 @@ export function LiveAPIProvider({ apiKey, children }) {
       videoIntervalRef.current = setInterval(() => {
         if (videoRef.current && videoRef.current.readyState >= 2) {
           // Low-res frame for Gemini (fast upload, ~6fps)
-          ctx.drawImage(videoRef.current, 0, 0, 320, 240);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
+          ctx.drawImage(videoRef.current, 0, 0, 256, 192);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.45);
           const base64 = dataUrl.split(',')[1];
           client.sendVideoFrame(base64);
 
-          // Send ArUco frame every 4th frame (~1.5fps) to save bandwidth
+          // Send ArUco frame every 2nd frame (~3fps) for faster marker detection
           frameCount++;
-          if (frameCount % 4 === 0 && backendWsRef.current?.readyState === WebSocket.OPEN) {
+          if (frameCount % 2 === 0 && backendWsRef.current?.readyState === WebSocket.OPEN) {
             arucoCtx.drawImage(videoRef.current, 0, 0, 640, 480);
             const arucoDataUrl = arucoCanvas.toDataURL('image/jpeg', 0.8);
             const arucoBase64 = arucoDataUrl.split(',')[1];
@@ -205,6 +214,9 @@ export function LiveAPIProvider({ apiKey, children }) {
   const _speakLocal = (text) => {
     const synth = window.speechSynthesis;
     synth.cancel(); // interrupt any current speech
+    // Stop Gemini audio so it doesn't collide with local TTS
+    audioStreamerRef.current?.stop();
+    geminiIdleRef.current = true; // allow surroundings timer to resume after TTS
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 1.1;
     utter.pitch = 1.0;
@@ -306,18 +318,22 @@ export function LiveAPIProvider({ apiKey, children }) {
       // so Gemini describes what it sees RIGHT NOW, not a stale buffered frame
       const canvas = canvasRef.current;
       if (!canvas || !videoRef.current || videoRef.current.readyState < 2) return;
+      // Only send if Gemini has finished its last turn (prevents queue buildup / freeze)
+      if (!geminiIdleRef.current) return;
+      geminiIdleRef.current = false; // mark busy until Gemini fires onTurnComplete
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       const base64 = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
-      client.sendFrameWithContext(base64, 'Describe what you see right now in 1-2 short sentences. Mention any obstacles, hazards, or landmarks.');
+      client.sendFrameWithContext(base64, 'In under 8 words: what is directly ahead? Name the biggest obstacle or say path is clear.');
     }, 2000);
-    console.log('[LiveAPI] Surroundings timer started (every 2s, with fresh frame)');
+    console.log('[LiveAPI] Surroundings timer started (every 2s, turn-gated)');
   };
 
   // Emergency keyword detection — listens for "emergency", "help", "SOS" and auto-dials
   // Disconnect everything
   const disconnect = useCallback(() => {
     emergencyFiredRef.current = false;
+    geminiIdleRef.current = true;
     if (surroundingsIntervalRef.current) {
       clearInterval(surroundingsIntervalRef.current);
       surroundingsIntervalRef.current = null;

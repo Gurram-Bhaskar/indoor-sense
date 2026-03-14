@@ -52,6 +52,7 @@ app.add_middleware(
 
 # Track state to avoid spamming duplicate updates
 last_marker_id = None
+last_marker_time = 0     # timestamp when last marker was seen — used to reset after leaving frame
 last_obstacles = set()
 last_obstacle_time = 0
 last_scene_id = None
@@ -60,7 +61,7 @@ last_scene_time = 0
 
 @app.websocket("/ws/vision")
 async def vision_ws(websocket: WebSocket):
-    global last_marker_id, last_obstacles, last_obstacle_time
+    global last_marker_id, last_marker_time, last_obstacles, last_obstacle_time
     global last_scene_id, last_scene_time
     await websocket.accept()
     print("[Backend] Vision WebSocket connected")
@@ -86,6 +87,16 @@ async def vision_ws(websocket: WebSocket):
 
             # 1. ArUco marker detection (highest priority)
             marker_id = detect_marker(image)
+
+            # Auto-reset last_marker_id after 3s of no detection
+            # so the same marker can be re-scanned when user returns to it
+            if marker_id is None:
+                if last_marker_id is not None and (now - last_marker_time) > 3.0:
+                    print(f"[Backend] Marker {last_marker_id} left frame — reset")
+                    last_marker_id = None
+            else:
+                last_marker_time = now  # keep alive while marker is visible
+
             if marker_id is not None and marker_id != last_marker_id:
                 last_marker_id = marker_id
                 last_scene_id = None  # Reset scene when marker found
